@@ -257,7 +257,7 @@ def run(data=ROOT / 'data/coco128.yaml',  # 'dataset.yaml path'
     nc, names = model.nc, model.names  # number of classes, class names
 
     # Input
-    gs = int(max(model.stride))  # grid size (max stride)
+    gs = int(max(model.stride))  # grid size (max stride) 32
     imgsz = [check_img_size(x, gs) for x in imgsz]  # verify img_size are gs-multiples
     im = torch.zeros(batch_size, 3, *imgsz).to(device)  # image size(1,3,320,192) BCHW iDetection
 
@@ -306,8 +306,8 @@ def run(data=ROOT / 'data/coco128.yaml',  # 'dataset.yaml path'
 
 def parse_opt():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data', type=str, default=ROOT / 'data/coco128.yaml', help='dataset.yaml path')
-    parser.add_argument('--weights', type=str, default=ROOT / 'yolov5s.pt', help='weights path')
+    parser.add_argument('--data', type=str, default=ROOT / 'data/coco.yaml', help='dataset.yaml path')
+    parser.add_argument('--weights', type=str, default='../YOLOModels/yolov3.pt', help='weights path') #ROOT / 'yolov5s.pt'
     parser.add_argument('--imgsz', '--img', '--img-size', nargs='+', type=int, default=[640, 640], help='image (h, w)')
     parser.add_argument('--batch-size', type=int, default=1, help='batch size')
     parser.add_argument('--device', default='cpu', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
