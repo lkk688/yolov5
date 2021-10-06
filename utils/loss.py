@@ -96,6 +96,9 @@ class ComputeLoss:
         h = model.hyp  # hyperparameters
 
         # Define criteria
+        #nn.BCEWithLogitsLoss: This loss combines a Sigmoid layer and the BCELoss in one single class
+        #BCE: Binary Cross Entropy between the target and the output
+        #h['cls_pw']=h['obj_pw']=(1, 0.5, 2.0)
         BCEcls = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([h['cls_pw']], device=device))
         BCEobj = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([h['obj_pw']], device=device))
 
@@ -117,6 +120,10 @@ class ComputeLoss:
     def __call__(self, p, targets):  # predictions, targets, model
         device = targets.device
         lcls, lbox, lobj = torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device)
+        
+        #tcls: classes
+        #tbox: bounding boxes
+        #indices: get the image index, anchor indices, grid coordinate (x,y) = 4 elements
         tcls, tbox, indices, anchors = self.build_targets(p, targets)  # targets
 
         # Losses
@@ -167,56 +174,104 @@ class ComputeLoss:
         return (lbox + lobj + lcls) * bs, torch.cat((lbox, lobj, lcls)).detach()
 
     def build_targets(self, p, targets):
-        # Build targets for compute_loss(), input targets(image,class,x,y,w,h)
-        na, nt = self.na, targets.shape[0]  # number of anchors, targets
+        # Build targets for compute_loss()
+        # p is the output of the model (3 detectors), len=3: [16(batch size),3(3anchors),80,80,85(1+4+80)], [16,3,40,40,85], [16,3,20,20,85]
+        # input targets: [image(image id in the current batch),class(class id),x,y,w,h(normalized bounding box)],
+
+        na, nt = self.na, targets.shape[0]  # number of anchors (na=3), number of targets in this batch
         tcls, tbox, indices, anch = [], [], [], []
-        gain = torch.ones(7, device=targets.device)  # normalized to gridspace gain
+        gain = torch.ones(7, device=targets.device)  # normalized to gridspace gain [1,1,1,1,1,1,1]
+
+        #ai is the anchor index
+        #torch.arange(na).float().view(na,1)
+        # tensor([[0.],
+        # [1.],
+        # [2.]])
+        #torch.arange(na).float().view(na,1).repeat(1,nt) repeat nt times in the second dimension
+        # tensor([[0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+        # [1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1., 1.],
+        # [2., 2., 2., 2., 2., 2., 2., 2., 2., 2., 2., 2., 2., 2.]])
         ai = torch.arange(na, device=targets.device).float().view(na, 1).repeat(1, nt)  # same as .repeat_interleave(nt)
+
+        #targets.repeat(na,1,1).shape=[3, nt, 6], change from [nt,6] to [3, nt, 6]
+        #ai[:,:,None].shape change from [3,nt] to [3,nt,1]
+        #torch.cat in the second dimension become [3, nt, 7], added anchor index to each nt vector [image,class,x,y,w,h,ai(1,2,3 for each na)]
         targets = torch.cat((targets.repeat(na, 1, 1), ai[:, :, None]), 2)  # append anchor indices
 
+        #off is one offset matrix (5,2)
         g = 0.5  # bias
         off = torch.tensor([[0, 0],
                             [1, 0], [0, 1], [-1, 0], [0, -1],  # j,k,l,m
                             # [1, 1], [1, -1], [-1, 1], [-1, -1],  # jk,jm,lk,lm
                             ], device=targets.device).float() * g  # offsets
+        # off= tensor([[ 0.00000,  0.00000],
+                    # [ 0.50000,  0.00000],
+                    # [ 0.00000,  0.50000],
+                    # [-0.50000,  0.00000],
+                    # [ 0.00000, -0.50000]])
 
-        for i in range(self.nl):
-            anchors = self.anchors[i]
-            gain[2:6] = torch.tensor(p[i].shape)[[3, 2, 3, 2]]  # xyxy gain
+        for i in range(self.nl): # for every detector header, nl=3, sample rate from 8,16,32
+            anchors = self.anchors[i] # [3,3,2] get the anchor for the current feature map, i-th one: [3,2]
+
+            #p[i].shape=[16(batch size),3(3anchors),80,80,85(1+4+80)]
+            #torch.tensor(p[i].shape)[[3, 2, 3, 2]] create [80,80,80,80]
+            gain[2:6] = torch.tensor(p[i].shape)[[3, 2, 3, 2]]  # xyxy gain in the current layer, e.g., [1,1,80,80,80,80,1], 80,80 is the current layer feature resolution
 
             # Match targets to anchors
-            t = targets * gain
-            if nt:
-                # Matches
-                r = t[:, :, 4:6] / anchors[:, None]  # wh ratio
-                j = torch.max(r, 1. / r).max(2)[0] < self.hyp['anchor_t']  # compare
+            t = targets * gain # convert normalized xywh to the current feature map (e.g., size=80x80),shape[3,nt,7]
+
+            if nt:# if box exists, get every anchor for each box
+                # Using shape to matche box with anchors, not IOU
+                #anchors[:, None] shape change from [3,2] to [3,2,1]
+                r = t[:, :, 4:6] / anchors[:, None]  # wh ratio to three different anchors [3,nt,2], w-box/w-anchor,h-box/h-anchor
+
+                #torch.max(r,1./r).shape=[3,nt,2], 
+                #torch.max Returns a namedtuple (values, indices) where values is the maximum value of each row of the input tensor in the given dimension dim
+                #torch.max(r, 1. / r).max(2)[0] get the values
+                #model.hyp['anchor_t']=4
+                j = torch.max(r, 1. / r).max(2)[0] < self.hyp['anchor_t']  # compare with threshold, return [3,nt] True/False
+                # get all boxes that meets this requirements: 1/4 < box_wh/anchor_wh < 4
                 # j = wh_iou(anchors, t[:, 4:6]) > model.hyp['iou_t']  # iou(3,n)=wh_iou(anchors(3,2), gwh(n,2))
+                
+                #if the box wh ratio over three anchors is large than threshold, filter out these boxes
+                #only boxes matched with anchor remains, t shape change from [3, nt, 7] to [nt-filtered, 7]
                 t = t[j]  # filter
 
                 # Offsets
-                gxy = t[:, 2:4]  # grid xy
-                gxi = gain[[2, 3]] - gxy  # inverse
+                gxy = t[:, 2:4]  # grid xy stores box's xy coordinate relative to the upper-left corner of the feature map, shape [nt-filtered,2]
+                gxi = gain[[2, 3]] - gxy  # inverse, use feature map size-gxy=(40-x,40-y) means the xy coordinate relative to the bottom-right corner
+
+                # divide each grid box into 4 parts via g=0.5, j,k,l,m (True/False value) means the box in each 4 parts
+                # First check box x,y coordinate > 1, and distance to the cell upper-left corner is <0.5
                 j, k = ((gxy % 1. < g) & (gxy > 1.)).T
                 l, m = ((gxi % 1. < g) & (gxi > 1.)).T
-                j = torch.stack((torch.ones_like(j), j, k, l, m))
-                t = t.repeat((5, 1, 1))[j]
-                offsets = (torch.zeros_like(gxy)[None] + off[:, None])[j]
+                j = torch.stack((torch.ones_like(j), j, k, l, m)) #j shape=[5,nf], stack 5 parts together
+
+                #torch.repeat The number of times to repeat this tensor along each dimension
+                t = t.repeat((5, 1, 1))[j]# t[nf,7] to [nf*3,7], each box must have three box cell (add two nearby cell for the anchor box matching)
+                offsets = (torch.zeros_like(gxy)[None] + off[:, None])[j]#[nf*3,2], generate offset for each box
             else:
                 t = targets[0]
                 offsets = 0
 
             # Define
             b, c = t[:, :2].long().T  # image, class
+            #b means image id in this batch (size=nf*3), c is the class (size=nf*3)
+
             gxy = t[:, 2:4]  # grid xy
             gwh = t[:, 4:6]  # grid wh
+            #get the grid cell xy indices
             gij = (gxy - offsets).long()
-            gi, gj = gij.T  # grid xy indices
+            gi, gj = gij.T  # grid xy indices, size=nf*3
 
             # Append
-            a = t[:, 6].long()  # anchor indices
+            a = t[:, 6].long()  # get anchor indices for each box value=0,1,2, size=nf*3
+            #save the image index, anchor indices, grid coordinate (x,y) = 4 elements
             indices.append((b, a, gj.clamp_(0, gain[3] - 1), gi.clamp_(0, gain[2] - 1)))  # image, anchor, grid indices
+            
+            #get the delta xy relative to the current cell, and width, height
             tbox.append(torch.cat((gxy - gij, gwh), 1))  # box
             anch.append(anchors[a])  # anchors
             tcls.append(c)  # class
 
-        return tcls, tbox, indices, anch
+        return tcls, tbox, indices, anch #3 elements each
