@@ -25,6 +25,9 @@ from utils.torch_utils import time_sync
 
 LOGGER = logging.getLogger(__name__)
 
+USE_MISHACT=True
+from mish_cuda import MishCuda as Mish
+
 
 def autopad(k, p=None):  # kernel, padding
     # Pad to 'same'
@@ -39,7 +42,10 @@ class Conv(nn.Module):
         super().__init__()
         self.conv = nn.Conv2d(c1, c2, k, s, autopad(k, p), groups=g, bias=False)
         self.bn = nn.BatchNorm2d(c2)
-        self.act = nn.SiLU() if act is True else (act if isinstance(act, nn.Module) else nn.Identity())
+        if USE_MISHACT==True:
+            self.act = Mish() if act else nn.Identity()
+        else:
+            self.act = nn.SiLU() if act is True else (act if isinstance(act, nn.Module) else nn.Identity())
 
     def forward(self, x):
         return self.act(self.bn(self.conv(x)))
@@ -113,7 +119,10 @@ class BottleneckCSP(nn.Module):
         self.cv3 = nn.Conv2d(c_, c_, 1, 1, bias=False)
         self.cv4 = Conv(2 * c_, c2, 1, 1)
         self.bn = nn.BatchNorm2d(2 * c_)  # applied to cat(cv2, cv3)
-        self.act = nn.LeakyReLU(0.1, inplace=True)
+        if USE_MISHACT == True:
+            self.act = Mish()
+        else:
+            self.act = nn.LeakyReLU(0.1, inplace=True)
         self.m = nn.Sequential(*[Bottleneck(c_, c_, shortcut, g, e=1.0) for _ in range(n)])
 
     def forward(self, x):
@@ -473,7 +482,10 @@ class BottleneckCSP2(nn.Module):
         self.cv2 = nn.Conv2d(c_, c_, 1, 1, bias=False)
         self.cv3 = Conv(2 * c_, c2, 1, 1)
         self.bn = nn.BatchNorm2d(2 * c_) 
-        self.act = nn.LeakyReLU(0.1, inplace=True) #Mish()
+        if USE_MISHACT==True:
+            self.act = Mish()
+        else:
+            self.act = nn.LeakyReLU(0.1, inplace=True) #Mish()
         self.m = nn.Sequential(*[Bottleneck(c_, c_, shortcut, g, e=1.0) for _ in range(n)])
 
     def forward(self, x):
@@ -496,7 +508,10 @@ class SPPCSP(nn.Module):
         self.cv5 = Conv(4 * c_, c_, 1, 1)
         self.cv6 = Conv(c_, c_, 3, 1)
         self.bn = nn.BatchNorm2d(2 * c_) 
-        self.act = nn.LeakyReLU(0.1, inplace=True) #Mish()
+        if USE_MISHACT==True:
+            self.act = Mish()
+        else:
+            self.act = nn.LeakyReLU(0.1, inplace=True) #Mish()
         self.cv7 = Conv(2 * c_, c2, 1, 1)
 
     def forward(self, x):

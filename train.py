@@ -435,11 +435,11 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
 
 def parse_opt(known=False):
     parser = argparse.ArgumentParser()
-    parser.add_argument('--weights', type=str, default='runs/train/yolov5scoco6/weights/last.pt', help='initial weights path')#yolov5l.pt yolov5s.pt
+    parser.add_argument('--weights', type=str, default='../YOLOmodels/yolov4-p5.pt', help='initial weights path')#yolov5l.pt yolov5s.pt
     parser.add_argument('--cfg', type=str, default='models/yolov4-p5.yaml', help='model.yaml path')
-    parser.add_argument('--data', type=str, default='data/coco.yaml', help='dataset.yaml path')
+    parser.add_argument('--data', type=str, default='data/mycoco.yaml', help='dataset.yaml path')
     parser.add_argument('--hyp', type=str, default='data/hyps/hyp.scratch.yaml', help='hyperparameters path')
-    parser.add_argument('--epochs', type=int, default=50)
+    parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--batch-size', type=int, default=8, help='total batch size for all GPUs')
     parser.add_argument('--imgsz', '--img', '--img-size', type=int, default=640, help='train, val image size (pixels)')
     parser.add_argument('--rect', action='store_true', help='rectangular training')
