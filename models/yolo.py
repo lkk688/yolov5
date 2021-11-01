@@ -139,10 +139,14 @@ class Model(nn.Module):
         y, dt = [], []  # outputs
         for m in self.model:
             if m.f != -1:  # if not from previous layer
+                #if not from previous layer, the x value should be from other layers in y
                 x = y[m.f] if isinstance(m.f, int) else [x if j == -1 else y[j] for j in m.f]  # from earlier layers
             if profile:
                 self._profile_one_layer(m, x, dt)
-            x = m(x)  # run
+
+            x = m(x)  # run forward for each module
+
+            #if this layer's out is in the save list, save the value to y
             y.append(x if m.i in self.save else None)  # save output
             if visualize:
                 feature_visualization(x, m.type, m.i, save_dir=visualize)
@@ -238,18 +242,18 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
         n = n_ = max(round(n * gd), 1) if n > 1 else n  # depth gain
         if m in [Conv, GhostConv, Bottleneck, GhostBottleneck, SPP, SPPF, DWConv, MixConv2d, Focus, CrossConv,
                  BottleneckCSP, BottleneckCSP2, SPPCSP, C3, C3TR, C3SPP, C3Ghost]:
-            c1, c2 = ch[f], args[0]
+            c1, c2 = ch[f], args[0] #input channel, output channel
             if c2 != no:  # if not output
                 c2 = make_divisible(c2 * gw, 8)
 
-            args = [c1, c2, *args[1:]]
+            args = [c1, c2, *args[1:]] #create a new args list for the module [inchannel, outchannel, xxx]
             if m in [BottleneckCSP, BottleneckCSP2, SPPCSP, C3, C3TR, C3Ghost]:
                 args.insert(2, n)  # number of repeats
                 n = 1
         elif m is nn.BatchNorm2d:
             args = [ch[f]]
         elif m is Concat:
-            c2 = sum([ch[x] for x in f])
+            c2 = sum([ch[x] for x in f]) #if Concat, the c2 (outchannel) is the sum of from channels
         elif m is Detect:
             args.append([ch[x] for x in f])
             if isinstance(args[1], int):  # number of anchors
@@ -261,6 +265,7 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
         else:
             c2 = ch[f]
 
+        #Create the module
         m_ = nn.Sequential(*[m(*args) for _ in range(n)]) if n > 1 else m(*args)  # module
         t = str(m)[8:-2].replace('__main__.', '')  # module type
         np = sum([x.numel() for x in m_.parameters()])  # number params
@@ -271,6 +276,8 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
         if i == 0:
             ch = []
         ch.append(c2)
+    
+    #output a layer list and save list (for branches)
     return nn.Sequential(*layers), sorted(save)
 
 
