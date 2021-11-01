@@ -99,7 +99,10 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
     cuda = device.type != 'cpu'
     init_seeds(1 + RANK)
     with torch_distributed_zero_first(RANK):
+        #data is the input dataset yaml file
+        #check_dataset in utils->general.py, parse the dataset.yaml file, and get the dictionary of the dataset
         data_dict = data_dict or check_dataset(data)  # check if None
+    #get dataset related configurations from the data_dict (parsed from yaml file)
     train_path, val_path = data_dict['train'], data_dict['val']
     nc = 1 if single_cls else int(data_dict['nc'])  # number of classes
     names = ['item'] if single_cls and len(data_dict['names']) != 1 else data_dict['names']  # class names
@@ -206,6 +209,8 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
         LOGGER.info('Using SyncBatchNorm()')
 
     # Trainloader
+    #train_path from data_dict (parsed from dataset.yaml file) is the training dataset path
+    #using class LoadImagesAndLabels(Dataset) in create_dataloader (utils->datasets.py)
     train_loader, dataset = create_dataloader(train_path, imgsz, batch_size // WORLD_SIZE, gs, single_cls,
                                               hyp=hyp, augment=True, cache=opt.cache, rect=opt.rect, rank=RANK,
                                               workers=workers, image_weights=opt.image_weights, quad=opt.quad,
