@@ -99,13 +99,7 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
     plots = not evolve  # create plots
     cuda = device.type != 'cpu'
     init_seeds(1 + RANK)
-<<<<<<< HEAD
-    with torch_distributed_zero_first(RANK):
-        #data is the input dataset yaml file
-        #check_dataset in utils->general.py, parse the dataset.yaml file, and get the dictionary of the dataset
-=======
     with torch_distributed_zero_first(LOCAL_RANK):
->>>>>>> 19c8760caa70f4d04d3fb974d797f9d922bf6eb8
         data_dict = data_dict or check_dataset(data)  # check if None
     #get dataset related configurations from the data_dict (parsed from yaml file)
     train_path, val_path = data_dict['train'], data_dict['val']
@@ -205,14 +199,6 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
 
         del ckpt, csd
 
-<<<<<<< HEAD
-    # Image sizes
-    gs = max(int(model.stride.max()), 32)  # grid size (max stride)=32, model.stride=[ 8., 16., 32.]
-    nl = model.model[-1].nl  # number of detection layers, nl=3 (used for scaling hyp['obj'])
-    imgsz = check_img_size(opt.imgsz, gs, floor=gs * 2)  # verify imgsz is gs-multiple
-
-=======
->>>>>>> 19c8760caa70f4d04d3fb974d797f9d922bf6eb8
     # DP mode
     if cuda and RANK == -1 and torch.cuda.device_count() > 1:
         logging.warning('DP not recommended, instead use torch.distributed.run for best DDP Multi-GPU results.\n'
@@ -461,21 +447,12 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
 
 def parse_opt(known=False):
     parser = argparse.ArgumentParser()
-<<<<<<< HEAD
     parser.add_argument('--weights', type=str, default='../YOLOmodels/yolov4-p5.pt', help='initial weights path')#yolov5l.pt yolov5s.pt
     parser.add_argument('--cfg', type=str, default='models/yolov4-p5.yaml', help='model.yaml path')
     parser.add_argument('--data', type=str, default='data/mycoco.yaml', help='dataset.yaml path')
     parser.add_argument('--hyp', type=str, default='data/hyps/hyp.scratch.yaml', help='hyperparameters path')
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--batch-size', type=int, default=8, help='total batch size for all GPUs')
-=======
-    parser.add_argument('--weights', type=str, default=ROOT / 'yolov5s.pt', help='initial weights path')
-    parser.add_argument('--cfg', type=str, default='', help='model.yaml path')
-    parser.add_argument('--data', type=str, default=ROOT / 'data/coco128.yaml', help='dataset.yaml path')
-    parser.add_argument('--hyp', type=str, default=ROOT / 'data/hyps/hyp.scratch.yaml', help='hyperparameters path')
-    parser.add_argument('--epochs', type=int, default=300)
-    parser.add_argument('--batch-size', type=int, default=16, help='total batch size for all GPUs, -1 for autobatch')
->>>>>>> 19c8760caa70f4d04d3fb974d797f9d922bf6eb8
     parser.add_argument('--imgsz', '--img', '--img-size', type=int, default=640, help='train, val image size (pixels)')
     parser.add_argument('--rect', action='store_true', help='rectangular training')
     parser.add_argument('--resume', nargs='?', const=True, default=False, help='resume most recent training')
@@ -492,14 +469,9 @@ def parse_opt(known=False):
     parser.add_argument('--adam', action='store_true', help='use torch.optim.Adam() optimizer')
     parser.add_argument('--sync-bn', action='store_true', help='use SyncBatchNorm, only available in DDP mode')
     parser.add_argument('--workers', type=int, default=8, help='maximum number of dataloader workers')
-<<<<<<< HEAD
     parser.add_argument('--project', default='runs/train', help='save to project/name')
     parser.add_argument('--entity', default=None, help='W&B entity')
     parser.add_argument('--name', default='yolov5scoco', help='save to project/name')
-=======
-    parser.add_argument('--project', default=ROOT / 'runs/train', help='save to project/name')
-    parser.add_argument('--name', default='exp', help='save to project/name')
->>>>>>> 19c8760caa70f4d04d3fb974d797f9d922bf6eb8
     parser.add_argument('--exist-ok', action='store_true', help='existing project/name ok, do not increment')
     parser.add_argument('--quad', action='store_true', help='quad dataloader')
     parser.add_argument('--linear-lr', action='store_true', help='linear LR')
