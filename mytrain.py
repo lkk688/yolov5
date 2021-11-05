@@ -134,11 +134,11 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
         #only create model if not pretrained weights
         model = Model(cfg, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
 
-    # Freeze
+    # Freeze layers in the freeze list
     freeze = [f'model.{x}.' for x in range(freeze)]  # layers to freeze
     for k, v in model.named_parameters():
         v.requires_grad = True  # train all layers
-        if any(x in k for x in freeze):
+        if any(x in k for x in freeze): #if some layers in freeze list
             print(f'freezing {k}')
             v.requires_grad = False
 
@@ -148,6 +148,7 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
     hyp['weight_decay'] *= batch_size * accumulate / nbs  # scale weight_decay
     LOGGER.info(f"Scaled weight_decay = {hyp['weight_decay']}")
 
+    #g0 is the BN, g1 is the weight, g2 is the bias
     g0, g1, g2 = [], [], []  # optimizer parameter groups
     for v in model.modules():
         if hasattr(v, 'bias') and isinstance(v.bias, nn.Parameter):  # bias
@@ -157,6 +158,7 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
         elif hasattr(v, 'weight') and isinstance(v.weight, nn.Parameter):  # weight (with decay)
             g1.append(v.weight)
 
+    #Initialize the optimizer
     if opt.adam:
         optimizer = Adam(g0, lr=hyp['lr0'], betas=(hyp['momentum'], 0.999))  # adjust beta1 to momentum
     else:
@@ -175,7 +177,7 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
         lf = one_cycle(1, hyp['lrf'], epochs)  # cosine 1->hyp['lrf']
     scheduler = lr_scheduler.LambdaLR(optimizer, lr_lambda=lf)  # plot_lr_scheduler(optimizer, scheduler, epochs)
 
-    # EMA
+    # EMA moving average
     ema = ModelEMA(model) if RANK in [-1, 0] else None
 
     # Resume
@@ -192,7 +194,7 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
             ema.updates = ckpt['updates']
 
         # Epochs
-        start_epoch = ckpt['epoch'] + 1
+        start_epoch = ckpt['epoch'] + 1 #pretrained modek epoch is -1
         if resume:
             assert start_epoch > 0, f'{weights} training to {epochs} epochs is finished, nothing to resume.'
         if epochs < start_epoch:
@@ -212,7 +214,7 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
                         'See Multi-GPU Tutorial at https://github.com/ultralytics/yolov5/issues/475 to get started.')
         model = torch.nn.DataParallel(model)
 
-    # SyncBatchNorm
+    # SyncBatchNorm, multi GPU card BN, only support DDP
     if opt.sync_bn and cuda and RANK != -1:
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model).to(device)
         LOGGER.info('Using SyncBatchNorm()')
@@ -226,9 +228,11 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
                                               prefix=colorstr('train: '))
     mlc = int(np.concatenate(dataset.labels, 0)[:, 0].max())  # max label class, 79
     nb = len(train_loader)  # number of batches
+
+    #It is OK if the training data has less class labels than the model
     assert mlc < nc, f'Label class {mlc} exceeds nc={nc} in {data}. Possible class labels are 0-{nc - 1}'
 
-    # Process 0
+    # Process 0, not DDP or the main thread in DDP
     if RANK in [-1, 0]:
         val_loader = create_dataloader(val_path, imgsz, batch_size // WORLD_SIZE * 2, gs, single_cls,
                                        hyp=hyp, cache=None if noval else opt.cache, rect=True, rank=-1,
@@ -245,16 +249,20 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
 
             # Anchors
             if not opt.noautoanchor:
+                #using clustering to select the best anchor
+                #anchor_t is the max magnification efficient
                 check_anchors(dataset, model=model, thr=hyp['anchor_t'], imgsz=imgsz)
+            #convert to float16 then change to FP32 again
+            #The type is FP32 now, but the weights range is float16
             model.half().float()  # pre-reduce anchor precision
 
         callbacks.run('on_pretrain_routine_end')
 
     # DDP mode
-    if cuda and RANK != -1:
+    if cuda and RANK != -1: #open DDP model
         model = DDP(model, device_ids=[LOCAL_RANK], output_device=LOCAL_RANK)
 
-    # Model parameters
+    # Model parameters, update hyper parameters
     hyp['box'] *= 3. / nl  # scale to layers
     hyp['cls'] *= nc / 80. * 3. / nl  # scale to classes and layers
     hyp['obj'] *= (imgsz / 640) ** 2 * 3. / nl  # scale to image size and layers
@@ -272,6 +280,8 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
     maps = np.zeros(nc)  # mAP per class
     results = (0, 0, 0, 0, 0, 0, 0)  # P, R, mAP@.5, mAP@.5-.95, val_loss(box, obj, cls)
     scheduler.last_epoch = start_epoch - 1  # do not move
+
+    #mixed precision FP16 and FP32 training
     scaler = amp.GradScaler(enabled=cuda)
     stopper = EarlyStopping(patience=opt.patience)
     compute_loss = ComputeLoss(model)  # init loss class
@@ -282,7 +292,7 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
     for epoch in range(start_epoch, epochs):  # epoch ------------------------------------------------------------------
         model.train()
 
-        # Update image weights (optional, single-GPU only)
+        # Update image weights (optional, single-GPU only), ignore this
         if opt.image_weights:
             cw = model.class_weights.cpu().numpy() * (1 - maps) ** 2 / nc  # class weights
             iw = labels_to_image_weights(dataset.labels, nc=nc, class_weights=cw)  # image weights
@@ -292,30 +302,38 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
         # b = int(random.uniform(0.25 * imgsz, 0.75 * imgsz + gs) // gs * gs)
         # dataset.mosaic_border = [b - imgsz, -b]  # height, width borders
 
-        mloss = torch.zeros(3, device=device)  # mean losses
+        mloss = torch.zeros(3, device=device)  # mean losses for detection
         if RANK != -1:
             train_loader.sampler.set_epoch(epoch)
         pbar = enumerate(train_loader)
         LOGGER.info(('\n' + '%10s' * 7) % ('Epoch', 'gpu_mem', 'box', 'obj', 'cls', 'labels', 'img_size'))
         if RANK in [-1, 0]:
             pbar = tqdm(pbar, total=nb)  # progress bar
-        optimizer.zero_grad()
+        optimizer.zero_grad() #clear gradient
+
         for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
+            #record the total iterations, used to stop warmup
             ni = i + nb * epoch  # number integrated batches (since train start), nb(number of batches)=7393
+
             imgs = imgs.to(device, non_blocking=True).float() / 255.0  # uint8 to float32, 0-255 to 0.0-1.0
 
             # Warmup
             if ni <= nw:
-                xi = [0, nw]  # x interp
+                xi = [0, nw]  # x interp, nw: maximum warmup
                 # compute_loss.gr = np.interp(ni, xi, [0.0, 1.0])  # iou loss ratio (obj_loss = 1.0 or iou)
+
+                #gradient accumulate, linear interp yi=[1, 64/batch_size]
+                #round after ni, accumulate increase from 1 to round(64/batchsize), if batchsize=32, accumulate=2: 2 batch update once (equivalent batchsize=64)
                 accumulate = max(1, np.interp(ni, xi, [1, nbs / batch_size]).round())
+
+                #update parameter lr to lr0 during warmup
                 for j, x in enumerate(optimizer.param_groups):
                     # bias lr falls from 0.1 to lr0, all other lrs rise from 0.0 to lr0
                     x['lr'] = np.interp(ni, xi, [hyp['warmup_bias_lr'] if j == 2 else 0.0, x['initial_lr'] * lf(epoch)])
                     if 'momentum' in x:
                         x['momentum'] = np.interp(ni, xi, [hyp['warmup_momentum'], hyp['momentum']])
 
-            # Multi-scale
+            # Multi-scale, not opened
             if opt.multi_scale:
                 sz = random.randrange(imgsz * 0.5, imgsz * 1.5 + gs) // gs * gs  # size
                 sf = sz / max(imgs.shape[2:])  # scale factor
@@ -324,7 +342,7 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
                     imgs = nn.functional.interpolate(imgs, size=ns, mode='bilinear', align_corners=False)
 
             # Forward
-            with amp.autocast(enabled=cuda):
+            with amp.autocast(enabled=cuda): #mixed precision
                 pred = model(imgs)  # forward, imgs: 16, 3, 640, 640], pred: 3 elements output
                 #pred=[[16, 3, 80, 80, 85], [16, 3, 40, 40, 85],[16, 3, 30, 30, 85]]
 
@@ -332,7 +350,7 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
                 #loss = lbox + lobj + lcls) * bs
                 #loss_items = torch.cat((lbox, lobj, lcls)
                 loss, loss_items = compute_loss(pred, targets.to(device))  # loss scaled by batch_size
-                if RANK != -1:
+                if RANK != -1: # in DDP, loss*GPU_number
                     loss *= WORLD_SIZE  # gradient averaged between devices in DDP mode
                 if opt.quad:
                     loss *= 4.
@@ -340,11 +358,12 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
             # Backward
             scaler.scale(loss).backward()
 
-            # Optimize
+            # Optimize, only update weights after accumulate (e.g., 2 times)
             if ni - last_opt_step >= accumulate:
+                #update the weights via .step
                 scaler.step(optimizer)  # optimizer.step
                 scaler.update()
-                optimizer.zero_grad()
+                optimizer.zero_grad() #clear gradients after update, accumulate grades when not update
                 if ema:
                     ema.update(model)
                 last_opt_step = ni
@@ -357,11 +376,13 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
                     f'{epoch}/{epochs - 1}', mem, *mloss, targets.shape[0], imgs.shape[-1]))
                 callbacks.run('on_train_batch_end', ni, model, imgs, targets, paths, plots, opt.sync_bn)
             # end batch ------------------------------------------------------------------------------------------------
+        #end epoch
 
         # Scheduler
         lr = [x['lr'] for x in optimizer.param_groups]  # for loggers
         scheduler.step()
 
+        #DDP process 0 or single-GPU
         if RANK in [-1, 0]:
             # mAP
             callbacks.run('on_train_epoch_end', epoch=epoch)
