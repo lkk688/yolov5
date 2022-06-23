@@ -51,6 +51,19 @@ Epoch   gpu_mem       box       obj       cls    labels  img_size
                Class     Images     Labels          P          R     mAP@.5 mAP@.5:.95: 100%|█| 157
                  all       5000      36335      0.697      0.618      0.658      0.467
    ```
+   Training results for yolov4-p5 based on Waymo dataset (data/waymococo.yaml):
+   ```bash
+    Epoch   gpu_mem       box       obj       cls    labels  img_size
+       9/9       10G   0.05392   0.03474    0.0022       135       640: 100%|█| 8052/8052 [3:00:30<
+               Class     Images     Labels          P          R     mAP@.5 mAP@.5:.95: 100%|█| 504
+                 all      16102     197601      0.854      0.593      0.671      0.423
+             vehicle      16102     150878       0.88      0.661      0.744        0.5
+          pedestrian      16102      45392      0.854      0.594      0.676       0.39
+             cyclist      16102       1331      0.826      0.525      0.594      0.378
+
+10 epochs completed in 31.442 hours.
+                                                                                
+   ```                                                                              
 </details>
 
 
