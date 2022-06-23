@@ -43,6 +43,14 @@ pip install onnx
 <summary>Add ScaledYOLOv4 model</summary>
 Add [yolov4-p5.yaml](/models/yolov4-p5.yaml) from Scaled-YOLOv4. To support the new modules in Scaled_YOLOv4, added classes of BottleneckCSP2 and SPPCSP into the [models/common.py](https://github.com/lkk688/yolov5/blob/master/models/common.py)
 
+   Training results for yolov4-p5 based on COCO dataset:
+   ```bash
+   yolov5$ python train.py
+Epoch   gpu_mem       box       obj       cls    labels  img_size
+       9/9     9.04G    0.0285   0.05297   0.01291       204       640: 100%|█| 7393/7393 [2:50:21<
+               Class     Images     Labels          P          R     mAP@.5 mAP@.5:.95: 100%|█| 157
+                 all       5000      36335      0.697      0.618      0.658      0.467
+   ```
 </details>
 
 
