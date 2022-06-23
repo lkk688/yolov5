@@ -38,6 +38,34 @@ pip install onnx
 ```
 </details>
 
+<details open>
+<summary>YOLOv5 Training</summary>
+   Training results for yolov5m based on Waymo dataset (data/waymococo.yaml):
+   ```bash
+   Epoch   gpu_mem       box       obj       cls    labels  img_size
+     49/49     11.6G   0.05748   0.03393  0.002104       388       640: 100%|█| 4026/4026 [1:49:15<
+               Class     Images     Labels          P          R     mAP@.5 mAP@.5:.95: 100%|█| 252
+                 all      16102     197601      0.873      0.651       0.73      0.466
+             vehicle      16102     150878      0.881      0.723      0.791      0.547
+          pedestrian      16102      45392      0.865      0.639      0.719      0.419
+             cyclist      16102       1331      0.873      0.591       0.68      0.431
+
+50 epochs completed in 93.533 hours.
+   ```
+   
+   Training results for yolov5l based on Waymo dataset (data/waymococo.yaml):
+   ```bash
+    Epoch   gpu_mem       box       obj       cls    labels  img_size
+     49/49     10.3G   0.05516   0.03241  0.001923       183       640: 100%|█| 8052/8052 [3:15:47<
+               Class     Images     Labels          P          R     mAP@.5 mAP@.5:.95: 100%|█| 504
+                 all      16102     197601      0.906      0.675      0.759      0.493
+             vehicle      16102     150878      0.911      0.742      0.816      0.575
+          pedestrian      16102      45392      0.889      0.658      0.746      0.446
+             cyclist      16102       1331      0.918      0.626      0.715      0.456
+
+50 epochs completed in 166.672 hours.                                                                                              
+   ```
+</details>
 
 <details open>
 <summary>Add ScaledYOLOv4 model</summary>
