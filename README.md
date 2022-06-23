@@ -1,7 +1,7 @@
 ## <div align="center">My added Readme in this Repo</div>
 
 <details open>
-<summary>Prepare</summary>
+<summary>Prepare Dataset</summary>
 Download COCO dataset and YOLOv5 formated label via [getcoco.sh](/data/scripts/get_coco.sh), after downloading you will see the following folders
 
 ```bash
@@ -21,6 +21,30 @@ The label format is YOLO format, not the original COCO annotation format. Each r
 
 If you have the original COCO annotation file (.json), I added this python code to do the conversion: [cocojsontoyolo.py](/data/cocojsontoyolo.py). You can add the COCO .json file path in the main function of this file. If you have other dataset format, you can direct convert them to YOLO format, you can also convert them to standard COCO json format, then use [cocojsontoyolo.py](/data/cocojsontoyolo.py) to convert to YOLO format. If you want to use the Waymo dataset, you can check my [WaymoObjectDetection](https://github.com/lkk688/WaymoObjectDetection) repository.
 </details>
+
+<details open>
+<summary>Install additional packages</summary>
+Install mish
+```bash
+git clone https://github.com/JunnYu/mish-cuda
+cd mish-cuda
+MyRepo/mish-cuda$ python setup.py build install
+```
+
+Install ONNX
+```bash
+pip install numpy protobuf==3.16.0
+pip install onnx
+```
+</details>
+
+
+<details open>
+<summary>Add ScaledYOLOv4 model</summary>
+Add [yolov4-p5.yaml](/models/yolov4-p5.yaml) from Scaled-YOLOv4. To support the new modules in Scaled_YOLOv4, added classes of BottleneckCSP2 and SPPCSP into the [models/common.py](https://github.com/lkk688/yolov5/blob/master/models/common.py)
+
+</details>
+
 
 ## <div align="center">YoloV5 Original Readme</div>
 <div align="center">
