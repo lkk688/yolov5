@@ -3,6 +3,7 @@
 <details open>
 <summary>Prepare</summary>
 Download COCO dataset and YOLOv5 formated label via [getcoco.sh](/data/scripts/get_coco.sh), after downloading you will see the following folders
+
 ```bash
 Dataset/coco$ ls
 annotations  labels   README.txt        train2017.cache  val2017.cache
@@ -15,6 +16,7 @@ test2017  train2017  val2017
 0 0.169938 0.659901 0.020406 0.080844
 0 0.093156 0.685223 0.015031 0.081315
 ```
+   
 The label format is YOLO format, not the original COCO annotation format. Each row in the .txt label file is (class x_center y_center width height) format, all these are in normalized xywh format (from 0 - 1). The COCO box format is [top left x, top left y, width, height] in pixels.
 
 If you have the original COCO annotation file (.json), I added this python code to do the conversion: [cocojsontoyolo.py](/data/cocojsontoyolo.py). You can add the COCO .json file path in the main function of this file. If you have other dataset format, you can direct convert them to YOLO format, you can also convert them to standard COCO json format, then use [cocojsontoyolo.py](/data/cocojsontoyolo.py) to convert to YOLO format. If you want to use the Waymo dataset, you can check my [WaymoObjectDetection](https://github.com/lkk688/WaymoObjectDetection) repository.
