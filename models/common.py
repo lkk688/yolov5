@@ -25,8 +25,9 @@ from utils.torch_utils import time_sync
 
 LOGGER = logging.getLogger(__name__)
 
-USE_MISHACT=True
-from mish_cuda import MishCuda as Mish
+USE_MISHACT=False
+if USE_MISHACT == True:
+    from mish_cuda import MishCuda as Mish
 
 
 def autopad(k, p=None):  # kernel, padding
