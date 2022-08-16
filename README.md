@@ -24,7 +24,8 @@ If you have the original COCO annotation file (.json), I added this python code 
 
 <details open>
 <summary>Install additional packages</summary>
-Install mish
+Install mish (optional), mish activation is disabled in my new code
+
 ```bash
 git clone https://github.com/JunnYu/mish-cuda
 cd mish-cuda
